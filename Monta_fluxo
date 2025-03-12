@@ -1,0 +1,95 @@
+#=============================================== IMPORT DE BIBLIOTECAS =========================================================
+
+import pandas as pd
+
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+# ============================================== BASES AUXILIARES ==============================================================
+
+feriados = pd.read_excel(r'path here', sheet_name='sheet name here')
+#================================================= INPUTS ======================================================================
+
+# Testes com 24G1249772
+
+# Data e emissão/vencimento
+data_emissao = datetime(2024, 7, 12)
+data_vencimento = datetime(2031, 6, 20)
+
+# Frequência de pagamento
+freq_pmt = 1
+descasamento_index = 2
+
+# Contagem de dias
+contagem  = 'Bus252'
+
+# Taxa do papel
+taxa = 12
+#========================================== TRATAMENTO DOS INPUTS ==============================================================
+
+# Data do primeiro pagamento
+first_pmt = datetime(data_emissao.year, data_emissao.month, data_vencimento.day)
+
+# Definindo o primeiro END CUPOM
+
+first_end_cupom = first_pmt    
+
+# Ajusta o primeiro pagamento em caso de, segunda a lógica, estar antes da data de emissão
+if first_pmt <  data_emissao:
+    #first_pmt = datetime(data_emissao.year, data_emissao.month+1, data_vencimento.day)
+    first_pmt = data_emissao + relativedelta(months=1)
+
+# Ajustar a data do primeiro pagamento caso esteja em algum feriado ou final de semana
+
+while (pd.Timestamp(first_pmt) in feriados['Data'].values) or first_pmt.weekday()>=5:
+    first_pmt = first_pmt + timedelta(days=1)
+    
+# Definindo o dia base dos aniversários (PRECISO INCLUIR NA LÓGICA O BIRTH DAY)
+birth_day = data_vencimento.day
+#============================================== PAGAMENTOS =====================================================================
+
+vencimentos = []
+    
+current_date = first_pmt
+    
+while current_date <= data_vencimento:
+        
+    vencimentos.append(current_date)
+    current_date = current_date + relativedelta(months=freq_pmt)
+    current_date = current_date.replace(day=birth_day)
+    
+    while (pd.Timestamp(current_date) in feriados['Data'].values) or current_date.weekday()>=5:
+        current_date = current_date + timedelta(days=1)
+    
+df_vencimentos = pd.DataFrame(vencimentos)
+df_vencimentos.columns = ['pmt date']
+#============================================ START-END CUPOM ==================================================================
+
+window = []
+
+# Ajustando as datas de acordo com a contagem de dias
+
+if contagem == 'Bus252':
+    end_cupom = first_pmt
+    
+else: end_cupom = first_end_cupom
+
+start_cupom = data_emissao
+    
+while end_cupom <= data_vencimento:
+        
+    window.append([start_cupom, end_cupom])
+    start_cupom = end_cupom
+    end_cupom = end_cupom + relativedelta(months=freq_pmt)
+    end_cupom = end_cupom.replace(day=birth_day)
+    
+    # Ajustando os valores de end cupom de acordo com as regras de contagem de dias
+    if contagem == 'Bus252':
+        while (pd.Timestamp(end_cupom) in feriados['Data'].values) or end_cupom.weekday()>=5:
+            end_cupom = end_cupom + timedelta(days=1)
+    
+df_window = pd.DataFrame(window)
+df_window.columns = ['start cupom', 'end cupom']
+
+df_window.insert(0, 'pmt date', df_vencimentos['pmt date'])
+
+df_window.to_excel(r'path to save')
