@@ -1,0 +1,165 @@
+import shutil
+import time
+from datetime import date
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import Select
+from selenium.common.exceptions import UnexpectedAlertPresentException, NoAlertPresentException
+from selenium.webdriver.common.alert import Alert
+from pathlib import Path
+import urllib.request
+import pandas as pd
+import openpyxl
+import os
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+import shutil
+import glob
+import pymsteams
+from datetime import datetime
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.chrome.service import Service
+import shutil
+import pandas as pd
+from pathlib import Path
+import win32com.client as win32
+
+dataref = date.today()
+ano = dataref.year
+mes = dataref.strftime('%m')
+dia = dataref.strftime('%d')
+
+participante = 'XPTOdtvm'
+user= 'Username'
+usersimplificado = ''
+#agora = get_current_datetime_string()
+
+def ignore_alerts(driver):
+    try:
+        # Tenta aceitar o alerta se estiver presente
+        alert = Alert(driver)
+        alert.accept()
+        print("Alerta aceito.")
+    except NoAlertPresentException:
+        # Se nenhum alerta estiver presente, continue
+        pass
+
+link = 'https://nome.cetip.net.br/menu/ctp/TelaPrincipalCetip21'
+navegador = webdriver.Chrome()
+navegador.get(link)
+time.sleep(10)
+
+iframe = navegador.find_element(By.XPATH, '/html/body/table/tbody/tr[2]/td/iframe')
+navegador.switch_to.frame(iframe)
+
+inputfield1 = navegador.find_element(By.ID, 'e1')
+inputfield1.send_keys(participante)
+
+inputfield2 = navegador.find_element(By.ID, 'e2')
+inputfield2.send_keys(user)
+
+inputfield3 = navegador.find_element(By.ID, 'e3')
+inputfield3.send_keys(usersimplificado)
+
+time.sleep(5)
+button1 = navegador.find_element(By.ID, 'Entrada')
+button1.click()
+
+navegador.switch_to.default_content()
+time.sleep(10)
+
+ignore_alerts(navegador)
+
+#LOGIN MANUALMENTE!!
+#Após o login, entrar no link abaixo manualmente
+#https://nome.cetip.net.br/menu/ctp/FiltroDeAcessoCetip21/Cetip21-Depositaria-FormularioFiltroTransferencia
+
+url = 'https://nome.cetip.net.br:443/menu/ctp/FiltroDeAcessoCetip21/SFServer-SFAlt2-FiltroConsultaAtivos'
+#url = 'https://nome.cetip.net.br/menu/ctp/TelaPrincipalCetip21'
+width = 931
+height = 883
+inputfield4 = navegador.execute_script(f"callingUrlInIframe('{url}', {width}, {height});")
+
+iframe = navegador.find_element(By.XPATH, '/html/body/table/tbody/tr[2]/td/table/tbody/tr[2]/td[2]/iframe')
+navegador.switch_to.frame(iframe)
+time.sleep(15)
+inputfield1 = navegador.find_element(By.ID, 'e11')
+#inputfield1.clear()
+#inputfield1.send_keys(cod)
+select = Select(inputfield1)
+select.select_by_visible_text('CFF')
+time.sleep(5)
+
+button1 = navegador.find_element(By.ID, 'Entrada')
+button1.click()
+time.sleep(5)
+export = navegador.find_element(By.XPATH,'/html/body/div/table/tbody/tr[8]/td/form/table/tbody/tr/td[1]/input')
+export.click()
+time.sleep(40)
+
+#shutil.move(str(Path.home() / "Downloads") + "//SFServer-SFAlt2-RelacaoConsultaAtivos.tsv","F:/BACKOFFICE DTVM/BASE DE DADOS/STATUS - CFF/"+str(ano)+"-"+str(mes)+"-"+str(dia)+".xlsx")
+#i=i+1
+    #df['Extracted Data'] = extracted_data
+
+# Read the TSV file into a DataFrame
+origem = str(Path.home() / "Downloads") + "\\xxxxxxxx_RelacaoConsultaAtivos.tsv"  # Replace with your TSV file path
+destino = "path.tsv"  # Replace with your TSV file path
+shutil.move(origem, destino)
+
+df = pd.read_csv(destino, sep='\t', encoding='latin1', on_bad_lines='skip',header=4)
+df['Código Ativo'] = df['Código Ativo'].str.replace('#', '', regex=False)
+
+# Save the DataFrame to an Excel file
+xlsx_file_path = "path.xlsx" # Replace with your desired output file path
+df.to_excel(xlsx_file_path, index=False, engine='openpyxl')
+
+#print(f"File converted successfully: {xlsx_file_path}")
+
+fpath = "pah.xlsx"
+fpath_dest = "path.xlsx"
+fpath_list = "path.xlsx"
+
+df = pd.read_excel(fpath)
+df_list = pd.read_excel(fpath_list)
+
+df_merge= pd.merge(df_list,df,on="Código Ativo", how="left").fillna("NÃO ENCONTRADO")
+columns=["Código Ativo","FUNDO","Situação"]
+df_merge=df_merge.filter(columns)
+
+df_merge.to_excel(fpath_dest, index=False, engine='openpyxl')
+
+def send_email_via_outlook(subject, body, to, cc=None, attachment_path=None):
+    # Create an instance of the Outlook application
+    outlook = win32.Dispatch('outlook.application')
+
+    # Create a new email item
+    mail = outlook.CreateItem(0)
+
+    # Set the email parameters
+    mail.Subject = subject
+    mail.Body = body
+    mail.To = to
+    if cc:
+        mail.CC = cc
+
+    # Attach the file if provided
+    if attachment_path and os.path.exists(attachment_path):
+        mail.Attachments.Add(attachment_path)
+
+    # Send the email
+    mail.Send()
+
+# Example usage:
+subject = "STATUS CFF "+str(ano)+"-"+str(mes)+"-"+str(dia)
+body = """Prezados, 
+
+Segue em anexo o status dos CFFs.
+
+Atenciosamente,"""
+
+to = "e-mail adress"
+cc = "email adress"  # Optional
+attachment_path = fpath_dest
+
+send_email_via_outlook(subject, body, to, cc, attachment_path)
